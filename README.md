@@ -3,7 +3,7 @@
 Data Preparation with R – Instructions
 
 
-Files you will need for this question: 
+Files you will need for this task: 
 
 (1)	NAICS 2017 – Statistics Canada: Description of the North American Industry Classification System (NAICS). 
 All you would need to understand this assignment is, how the NAICS is works as a hierarchical structure for defining industries at different levels of aggregation. For example (see page 491), a 2-digit NAICS industry (e.g., 23 - Construction) is a composed of a some 3-digit NAICS industries (236 - Construction of buildings, 237 - Heavy and civil engineering construction, and a few more 3-digit NAICS industries). Similarly, a 3-digit NAICS industry (e.g., 236 - Construction of buildings), is composed of 4-digit NAICS industries (2361 - Residential building construction and 2362 - Non-residential building construction).
