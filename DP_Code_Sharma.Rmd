@@ -1,0 +1,112 @@
+---
+title: "Part_3_code"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+1. **Remark**: Note that my goal here was to complete the question in the most accurate and fastest way possible. As such, it's possible to perhaps write even more efficient code than the one presented below. But as far as I can tell it gets the job done, while being as intuitive as possible. 
+
+2. **Important note about question understanding**: The Data Output Template file confused me. The empty table contains only **three** industries to fill. However, the LMO industries file contains 61 industries, thus **I assumed that you wanted me to prepare employment information for all 61 industries**. If it was just those three, then the data wrangling problem is trivial and the first part of the third code chunk is not required. However, for completeness I prepared employment figures for all 61. The finished Data Output Template file contains two files, one with just the three industries and the rest comprising all 61. 
+
+3. **Compiling code on own machine**: The code provided below should run as is in an R terminal once the working directory code is adjusted and the data files are linked. 
+
+## Load data 
+
+I gather RTRA csv files from my working directory. 
+
+```{r, results=FALSE,warning=FALSE, message=FALSE}
+library(plyr)
+library(dplyr)
+library(readr)
+setwd("~/OneDrive - Kent State University/BC public service 78168/Requisition 78168 R Test")
+mydir = "csvfolder"
+myfiles = list.files(path=mydir, pattern="*.csv", full.names=TRUE)
+dat_csv = ldply(myfiles, read_csv)
+```
+
+## Data preparation of combined RTRA files
+
+To merge, I require the NAICS code, so I separate them from the characters. 
+
+```{r,warning=FALSE,message=FALSE}
+library(stringr)
+library(tidyverse)
+dat_csv1 <- dat_csv %>%
+  separate(NAICS,c("Word","naics"),"\\[") %>% #separate the codes from the text
+  mutate(naics_clean = str_replace(naics,"\\]","")) %>%
+  mutate(naics_clean = ifelse(is.na(naics_clean),Word,naics_clean)) %>% #merge the numbers only values with the previously separated values. 
+  mutate_at(vars("naics_clean"), funs(as.numeric)) %>% #convert to numeric
+  select(!naics) %>%
+  arrange(SYEAR, SMTH)
+library(knitr)
+kable(head(dat_csv1))
+```
+
+## Convert LMO data to in panel format and perform required merges. 
+
+In this chunk: 
+
+1. I first convert the LMO industries file to panel format for merging later. 
+2. Next the prepared data frame is merged using the industries as groups (by year and month) with dat_csv1 (the RTRA prepared file)
+3. The data is pivoted as required: wide and long.
+4. The full table is generate directly from R and not copy-pasted to Excel. 
+5. Adjustments are made for three special cases as mentioned in the LMO file. 
+6. Partial data frame printed for reader. For full table see csv and xlsx file. 
+```{r}
+library(readxl)
+library(tidyverse)
+setwd("~/OneDrive - Kent State University/BC public service 78168/Requisition 78168 R Test")
+df <- read_excel("lmo_naics.xlsx")
+
+#Prepare LMO data file
+df2 <- df %>%
+  separate_rows(NAICS, convert = T) %>% #expand orginal data such that each NAICS code is in its own row
+  filter(NAICS != "minus") %>% #remove character terms 
+  filter(NAICS != "") %>% #remove empty character points
+  filter(!duplicated(NAICS)) #remove duplicates in NAICS column
+
+#Prepare panel data for the 61 industries
+df2 <- df2 %>% 
+  left_join(expand_grid(`LMO 61 Industries` = df2$`LMO 61 Industries`, 
+                   SYEAR = 1997:2020, 
+                   SMTH = 1:12), 
+            by = "LMO 61 Industries") #Prepare panel
+
+df2 <- df2[!duplicated(df2), ] %>%
+  mutate_at(vars("NAICS"), funs(as.numeric)) 
+colnames(df2)[2] <- "naics_clean"
+
+df_main <- df2 %>%
+  left_join(dat_csv1,by=c("naics_clean","SYEAR","SMTH")) 
+
+library(dplyr)
+df_main2 <- df_main %>% 
+  select(`LMO 61 Industries`,SYEAR,SMTH,`_EMPLOYMENT_`) %>%
+  group_by(`LMO 61 Industries`,SYEAR,SMTH) %>%
+  summarise_all(funs(sum(., na.rm = TRUE))) %>% #collapse data for each requested NAICS code
+  pivot_wider(names_from = `LMO 61 Industries`,values_from = `_EMPLOYMENT_`) %>% #Pivot data for final requested form
+  filter(SYEAR <= 2018) %>%
+  mutate(`Transportation equipment manufacturing (excluding shipbuilding)`=
+           `Transportation equipment manufacturing (excluding shipbuilding)`-
+           `Ship and boat building`,
+         `Business and building support services (excluding travel)`=
+           `Business and building support services (excluding travel)`-
+           `Travel arrangement services`,
+         `Personal, non-automotive repair and non-profit services` = 
+           `Personal, non-automotive repair and non-profit services` - 
+           `Automotive repair and maintenance`) #Compute employment figures for three special cases in LMO files. 
+
+write.csv(df_main2, file="employment_pivot_wide.csv")
+
+write.csv(df_main2 %>% 
+            gather(key = "LMO_Detailed_Industry", 
+                   value = "Employment",
+                   -c("SYEAR","SMTH")) %>%
+            arrange(SYEAR,SMTH), 
+          file="employment_pivot_long.csv")
+kable(head(df_main2[,1:6])) #Partial data frame printed for reader. For full table see csv and xlsx file. 
+```
+
